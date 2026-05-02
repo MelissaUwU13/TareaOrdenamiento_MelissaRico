@@ -1,20 +1,40 @@
 package org.example.tareaordenamiento;
 
-import eu.hansolo.toolbox.Constants;
-
 import java.io.*;
 import java.util.*;
 
 public class Ordenamiento {
 
-    private static final int MAX_CHUNK_SIZE = 512 * 1024 * 1024;
+    private static final int MAX_CHUNK_SIZE = 100; // pequeño para pruebas
+
+    static class Registro {
+        String nombre;
+        int id;
+        String pais;
+
+        public Registro(String nombre, int id, String pais) {
+            this.nombre = nombre;
+            this.id = id;
+            this.pais = pais;
+        }
+
+        public static Registro fromLine(String line) {
+            String[] parts = line.split(",");
+            return new Registro(parts[0], Integer.parseInt(parts[1]), parts[2]);
+        }
+
+        @Override
+        public String toString() {
+            return nombre + "," + id + "," + pais;
+        }
+    }
 
     static class MergeNode {
-        int value;
+        Registro registro;
         int fileIndex;
 
-        public MergeNode(int value, int fileIndex) {
-            this.value = value;
+        public MergeNode(Registro registro, int fileIndex) {
+            this.registro = registro;
             this.fileIndex = fileIndex;
         }
     }
@@ -23,15 +43,15 @@ public class Ordenamiento {
         List<File> tempFiles = new ArrayList<>();
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
 
-        List<Integer> buffer = new ArrayList<>();
+        List<Registro> buffer = new ArrayList<>();
         String line;
         int currentSize = 0;
         int fileCount = 0;
 
         while ((line = reader.readLine()) != null) {
-            int num = Integer.parseInt(line);
-            buffer.add(num);
-            currentSize += 4;
+            Registro r = Registro.fromLine(line);
+            buffer.add(r);
+            currentSize += line.length();
 
             if (currentSize >= MAX_CHUNK_SIZE) {
                 tempFiles.add(writeChunk(buffer, fileCount++));
@@ -48,35 +68,34 @@ public class Ordenamiento {
         return tempFiles;
     }
 
-    private static File writeChunk(List<Integer> buffer, int index) throws IOException {
-        Collections.sort(buffer);
+    private static File writeChunk(List<Registro> buffer, int index) throws IOException {
+        buffer.sort(Comparator.comparingInt(r -> r.id));
 
         File tempFile = new File("temp_" + index + ".dat");
         BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
 
-        for (int num : buffer) {
-            writer.write(num + "\n");
+        for (Registro r : buffer) {
+            writer.write(r.toString());
+            writer.newLine();
         }
 
         writer.close();
         return tempFile;
     }
 
-    // 🔹 FASE 2: Merge
     public static void mergeFiles(List<File> tempFiles, File outputFile) throws IOException {
 
         List<BufferedReader> readers = new ArrayList<>();
         PriorityQueue<MergeNode> minHeap =
-                new PriorityQueue<>(Comparator.comparingInt(n -> n.value));
+                new PriorityQueue<>(Comparator.comparingInt(n -> n.registro.id));
 
-        // abrir archivos
         for (int i = 0; i < tempFiles.size(); i++) {
             BufferedReader br = new BufferedReader(new FileReader(tempFiles.get(i)));
             readers.add(br);
 
             String line = br.readLine();
             if (line != null) {
-                minHeap.add(new MergeNode(Integer.parseInt(line), i));
+                minHeap.add(new MergeNode(Registro.fromLine(line), i));
             }
         }
 
@@ -84,13 +103,14 @@ public class Ordenamiento {
 
         while (!minHeap.isEmpty()) {
             MergeNode node = minHeap.poll();
-            writer.write(node.value + "\n");
+            writer.write(node.registro.toString());
+            writer.newLine();
 
             BufferedReader br = readers.get(node.fileIndex);
             String line = br.readLine();
 
             if (line != null) {
-                minHeap.add(new MergeNode(Integer.parseInt(line), node.fileIndex));
+                minHeap.add(new MergeNode(Registro.fromLine(line), node.fileIndex));
             }
         }
 
@@ -102,10 +122,11 @@ public class Ordenamiento {
     }
 
     public static void main(String[] args) throws IOException {
-        File input = new File("entrada.dat");
-        File output = new File("salida.dat");
+        File archivo1 = new File("archivo.dat");
+        File archivo2 = new File("archivoOrdenado.dat");
 
-        List<File> ArchivosTemp = partitionAndSort(input);
-        mergeFiles(ArchivosTemp, output);
+        List<File> tempFiles = partitionAndSort(archivo1);
+        mergeFiles(tempFiles, archivo2);
+
     }
 }
